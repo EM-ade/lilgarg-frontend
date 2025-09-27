@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    font-family: 'Inter', system-ui, sans-serif;
+    background-color: #090717;
+    color: rgba(255, 255, 255, 0.92);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply min-h-screen text-white;
+    background-color: #090717;
+  }
+
+  a {
+    @apply font-medium transition-colors;
+    color: #FF3CAC;
+  }
+
+  a:hover {
+    color: #2B86C5;
+  }
+}

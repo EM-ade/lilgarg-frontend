@@ -1,9 +1,13 @@
 "use client"
 
-import { useEffect } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
+import { useWallet } from '@solana/wallet-adapter-react'
+import { WalletReadyState } from '@solana/wallet-adapter-base'
 
-const wallets = [
+type WalletWithReadyState = ReturnType<typeof useWallet>['wallets'][number]
+
+const fallbackWallets = [
   {
     name: 'Phantom',
     description: 'Open this portal in the Phantom in-app browser.',
@@ -37,6 +41,10 @@ type MobileWalletSheetProps = {
 }
 
 const MobileWalletSheet = ({ isOpen, onClose, portalUrl }: MobileWalletSheetProps) => {
+  const { wallets: availableWallets, wallet, select, connect, connecting } = useWallet()
+  const [pendingWalletName, setPendingWalletName] = useState<string | null>(null)
+  const [connectionError, setConnectionError] = useState<string | null>(null)
+
   useEffect(() => {
     if (!isOpen) return
     const handler = (event: KeyboardEvent) => {
@@ -58,10 +66,64 @@ const MobileWalletSheet = ({ isOpen, onClose, portalUrl }: MobileWalletSheetProp
     return undefined
   }, [isOpen])
 
-  const handleWalletSelect = (buildLink: (url: string) => string) => {
+  const detectedWallets = useMemo(
+    () => availableWallets.filter((entry) => entry.readyState === WalletReadyState.Installed),
+    [availableWallets],
+  )
+
+  const loadableWallets = useMemo(
+    () =>
+      availableWallets.filter(
+        (entry) =>
+          entry.readyState === WalletReadyState.Loadable || entry.readyState === WalletReadyState.NotDetected,
+      ),
+    [availableWallets],
+  )
+
+  const handleWalletSelect = useCallback(
+    (entry: WalletWithReadyState) => {
+      setConnectionError(null)
+      setPendingWalletName(entry.adapter.name)
+      select(entry.adapter.name)
+    },
+    [select],
+  )
+
+  useEffect(() => {
+    if (!pendingWalletName) return
+    if (!wallet || wallet.adapter.name !== pendingWalletName) return
+
+    let cancelled = false
+
+    void (async () => {
+      try {
+        await connect()
+        if (!cancelled) {
+          onClose()
+        }
+      } catch (error) {
+        console.error('[wallet] Failed to connect', error)
+        if (!cancelled) {
+          const message =
+            error instanceof Error ? error.message : 'Failed to connect to the selected wallet. Please try again.'
+          setConnectionError(message)
+        }
+      } finally {
+        if (!cancelled) {
+          setPendingWalletName(null)
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [pendingWalletName, wallet, connect, onClose])
+
+  const handleFallbackLink = useCallback((buildLink: (url: string) => string) => {
     const target = buildLink(portalUrl)
     window.location.href = target
-  }
+  }, [portalUrl])
 
   return (
     <AnimatePresence>
@@ -89,19 +151,94 @@ const MobileWalletSheet = ({ isOpen, onClose, portalUrl }: MobileWalletSheetProp
               </p>
             </div>
 
-            <div className="mt-6 space-y-3">
-              {wallets.map((wallet) => (
+            {connectionError && (
+              <div className="mt-6 rounded-2xl border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-200">
+                {connectionError}
+              </div>
+            )}
+
+            {detectedWallets.length > 0 && (
+              <div className="mt-6 space-y-3">
+                <p className="text-xs uppercase tracking-[0.3em] text-white/50">Wallets detected on this device</p>
+                {detectedWallets.map((entry) => {
+                  const isPending = pendingWalletName === entry.adapter.name || connecting
+                  return (
+                    <button
+                      key={entry.adapter.name}
+                      type="button"
+                      onClick={() => handleWalletSelect(entry)}
+                      disabled={isPending}
+                      className={`w-full rounded-2xl border border-white/10 bg-white/5 p-[1px] text-left transition hover:bg-white/10 disabled:cursor-wait disabled:opacity-60`}
+                    >
+                      <div className="rounded-2xl bg-[#0B081A] p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            {entry.adapter.icon && (
+                              <img
+                                src={entry.adapter.icon}
+                                alt={`${entry.adapter.name} icon`}
+                                className="h-8 w-8 rounded-full"
+                              />
+                            )}
+                            <div>
+                              <p className="font-display text-lg text-white">{entry.adapter.name}</p>
+                              <p className="text-xs text-white/70">Ready to connect immediately.</p>
+                            </div>
+                          </div>
+                          <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/70">
+                            {isPending ? 'Connecting…' : 'Connect'}
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            {detectedWallets.length === 0 && loadableWallets.length > 0 && (
+              <div className="mt-6 space-y-3">
+                <p className="text-xs uppercase tracking-[0.3em] text-white/50">Supported mobile wallets</p>
+                {loadableWallets.map((entry) => (
+                  <button
+                    key={entry.adapter.name}
+                    type="button"
+                    onClick={() => handleWalletSelect(entry)}
+                    className="w-full rounded-2xl border border-white/10 bg-white/5 p-[1px] text-left transition hover:bg-white/10"
+                  >
+                    <div className="rounded-2xl bg-[#0B081A] p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          {entry.adapter.icon && (
+                            <img src={entry.adapter.icon} alt={`${entry.adapter.name} icon`} className="h-8 w-8 rounded-full" />
+                          )}
+                          <div>
+                            <p className="font-display text-lg text-white">{entry.adapter.name}</p>
+                            <p className="text-xs text-white/70">Tap to open in the wallet app.</p>
+                          </div>
+                        </div>
+                        <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/70">Open</span>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-8 space-y-3">
+              <p className="text-xs uppercase tracking-[0.3em] text-white/50">Deep link options</p>
+              {fallbackWallets.map((walletOption) => (
                 <button
-                  key={wallet.name}
+                  key={walletOption.name}
                   type="button"
-                  onClick={() => handleWalletSelect(wallet.buildLink)}
-                  className={`w-full rounded-2xl bg-gradient-to-r ${wallet.accent} p-[1px] text-left`}
+                  onClick={() => handleFallbackLink(walletOption.buildLink)}
+                  className={`w-full rounded-2xl bg-gradient-to-r ${walletOption.accent} p-[1px] text-left`}
                 >
                   <div className="rounded-2xl bg-[#0B081A] p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="font-display text-lg text-white">{wallet.name}</p>
-                        <p className="text-xs text-white/70">{wallet.description}</p>
+                        <p className="font-display text-lg text-white">{walletOption.name}</p>
+                        <p className="text-xs text-white/70">{walletOption.description}</p>
                       </div>
                       <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/70">Launch</span>
                     </div>

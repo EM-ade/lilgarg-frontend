@@ -1,5 +1,14 @@
 import { apiClient } from './apiClient'
 
+export type ContractSummary = {
+  contractAddress: string
+  requiredNftCount: number
+  ownedCount: number
+  roleId?: string | null
+  roleName?: string | null
+  meetsRequirement: boolean
+}
+
 export type VerificationSession = {
   id: string
   discordId: string
@@ -11,6 +20,7 @@ export type VerificationSession = {
   createdAt: string
   message?: string
   username?: string
+  contractSummaries?: ContractSummary[]
 }
 
 export type CreateSessionResponse = {

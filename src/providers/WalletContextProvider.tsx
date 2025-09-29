@@ -7,8 +7,9 @@ import {
   LedgerWalletAdapter,
   PhantomWalletAdapter,
   SolflareWalletAdapter,
-  TorusWalletAdapter,
 } from '@solana/wallet-adapter-wallets'
+import { BackpackWalletAdapter } from '@solana/wallet-adapter-backpack'
+import { WalletConnectWalletAdapter } from '@solana/wallet-adapter-walletconnect'
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base'
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui'
 import '@solana/wallet-adapter-react-ui/styles.css'
@@ -21,15 +22,28 @@ interface WalletContextProviderProps {
 
 const WalletContextProvider: FC<WalletContextProviderProps> = ({ children }) => {
   const endpoint = getSolanaRpcUrl()
+  const cluster = WalletAdapterNetwork.Mainnet
+  const walletConnectProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
 
   const wallets = useMemo(
     () => [
       new PhantomWalletAdapter(),
-      new SolflareWalletAdapter({ network: WalletAdapterNetwork.Mainnet }),
-      new TorusWalletAdapter(),
+      new SolflareWalletAdapter({ network: cluster }),
+      new BackpackWalletAdapter(),
+      ...(walletConnectProjectId
+        ? [
+            new WalletConnectWalletAdapter({
+              network: cluster,
+              options: {
+                projectId: walletConnectProjectId,
+                relayUrl: 'wss://relay.walletconnect.com',
+              },
+            }),
+          ]
+        : []),
       new LedgerWalletAdapter(),
     ],
-    [],
+    [cluster, walletConnectProjectId],
   )
 
   return (

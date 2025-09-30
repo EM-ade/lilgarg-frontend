@@ -97,7 +97,9 @@ const SessionPage = () => {
       const signatureBytes = await signMessage(messageBytes)
       const signatureBase58 = bs58.encode(signatureBytes)
 
-      const response = await submitSignature(token, signatureBase58)
+      const response = await submitSignature(token, signatureBase58, {
+        walletAddress: publicKey.toBase58(),
+      })
 
       setSigningState('success')
       setVerificationSummary({

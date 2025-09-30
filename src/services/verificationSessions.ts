@@ -37,13 +37,18 @@ export const fetchSessionByToken = async (token: string) => {
   return response.data.session
 }
 
-export const submitSignature = async (token: string, signature: string, username?: string) => {
+export const submitSignature = async (
+  token: string,
+  signature: string,
+  options: { username?: string; walletAddress?: string } = {},
+) => {
   const response = await apiClient.post(
     '/api/verification/session/verify',
     {
       token,
       signature,
-      username,
+      username: options.username,
+      walletAddress: options.walletAddress,
     },
     { withCredentials: false },
   )
